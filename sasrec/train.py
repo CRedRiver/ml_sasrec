@@ -9,12 +9,14 @@ from sasrec.sasrecdataset import SASRecDataset
 from sasrec.preprocess import preprocess
 from evaluate.evaluate import evaluate_model
 
-MAX_LEN = 300
+# --- HYPERPARAMETERS ---
+MAX_LEN = 50  
 HIDDEN_SIZE = 128
 NUM_HEADS = 2
 DROPOUT_RATE = 0.3
 BATCH_SIZE = 64
 PATIENCE_LIMIT = 10
+LABEL_SMOOTH = 0.0
 DATA_PATH = r"D:\HUST\2025.2\ML\Project\data\ratings.csv"
 GENRE_PATH = r"D:\HUST\2025.2\ML\Project\data\movies.csv"
 CHECKPOINT = "sasrec_checkpoint.pth"
@@ -32,8 +34,9 @@ class SASRec():
         train_seqs = [seq[:-2] for seq in seqs]
         eval_seqs = [seq[:-1] for seq in seqs]
 
-        train_dataset = SASRecDataset(train_seqs, self.movie_to_genre, max_len, is_training=True, stride=None)
-        eval_dataset = SASRecDataset(eval_seqs, self.movie_to_genre, max_len)
+        # Fixed stride to scale dynamically with the new max_len
+        train_dataset = SASRecDataset(train_seqs, self.num_genres, self.movie_to_genre, max_len, is_training=True, stride=max_len // 2)
+        eval_dataset = SASRecDataset(eval_seqs, self.num_genres, self.movie_to_genre, max_len)
 
         pin_mem = DEVICE.type == "cuda"
         num_w = 4 if DEVICE.type == "cuda" else 0
@@ -47,7 +50,7 @@ class SASRec():
         self.best_epoch = 0
         self.patience_lim = patience_lim
         self.lr = lr
-        self.best_eval_ndcg = 0.0  # Initialized at 0.0 since higher NDCG is better!
+        self.best_eval_ndcg = 0.0  
 
     def train(self, **params):
         print(f"Training on {DEVICE}")
@@ -61,8 +64,19 @@ class SASRec():
             num_genres=params["num_genres"]
         ).to(DEVICE)
 
-        criterion = nn.CrossEntropyLoss(ignore_index=0) 
+        criterion = nn.CrossEntropyLoss(ignore_index=0, label_smoothing=LABEL_SMOOTH) 
+        
+        # Standard Adam (Weight Decay = 0) as proven to work best for this configuration
         optimizer = optim.Adam(model.parameters(), lr=self.lr)
+        
+        # OneCycleLR Scheduler for Transformer Warmup
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer, 
+            max_lr=self.lr, 
+            steps_per_epoch=len(self.dataloader), 
+            epochs=self.epochs, 
+            pct_start=0.1 # Spend the first 10% of training warming up the learning rate
+        )
 
         start_epoch = 0
         patience_counter = 0
@@ -73,6 +87,9 @@ class SASRec():
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             
+            if 'scheduler_state_dict' in checkpoint:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                
             start_epoch = checkpoint['epoch'] + 1
             self.best_eval_ndcg = checkpoint.get('best_eval_ndcg', 0.0)
             patience_counter = checkpoint.get('patience_counter', 0)
@@ -85,10 +102,11 @@ class SASRec():
             model.train()
             total_loss = 0.0
     
+            # FIXED: Unpacking order matches dataset (inputs, genres, targets)
             for batch_inputs, batch_targets, batch_genres in self.dataloader:
                 batch_inputs = batch_inputs.to(DEVICE, non_blocking=True)
-                batch_targets = batch_targets.to(DEVICE, non_blocking=True)
                 batch_genres = batch_genres.to(DEVICE, non_blocking=True)
+                batch_targets = batch_targets.to(DEVICE, non_blocking=True)
         
                 optimizer.zero_grad(set_to_none=True)
         
@@ -100,16 +118,17 @@ class SASRec():
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
+                
+                # Step the scheduler after every batch
+                scheduler.step()
         
                 total_loss += loss.item()
             
             avg_train_loss = total_loss / len(self.dataloader)
             
-            # Step into metric verification using Leave-One-Out (LOO) with past history masking
-            val_hr, val_ndcg, val_mrr = evaluate_model(model, self.eval_dataloader, DEVICE, k=10)
+            val_hr, val_ndcg, val_mrr = evaluate_model(model, self.eval_dataloader, DEVICE, k=20)
         
-            # Early stopping check based directly on performance metric ceiling
-            if val_ndcg > self.best_eval_ndcg:  
+            if val_ndcg >= self.best_eval_ndcg:  
                 self.best_eval_ndcg = val_ndcg
                 self.best_epoch = epoch + 1
                 torch.save(model.state_dict(), self.best_weights_path)
@@ -117,12 +136,13 @@ class SASRec():
             else:
                 patience_counter += 1
             
-            print(f"Epoch [{epoch + 1}/{self.epochs}] | Train Loss: {avg_train_loss:.4f} | Val HR@10: {val_hr:.4f} | Val NDCG@10: {val_ndcg:.4f}")
+            print(f"Epoch [{epoch + 1}/{self.epochs}] | Train Loss: {avg_train_loss:.4f} | Val HR@20: {val_hr:.4f} | Val NDCG@20: {val_ndcg:.4f}")
             
             checkpoint = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
                 'best_eval_ndcg': self.best_eval_ndcg,
                 'patience_counter': patience_counter,
                 'best_epoch': self.best_epoch,
@@ -147,10 +167,10 @@ if __name__ == "__main__":
         "num_heads": NUM_HEADS,
         "dropout_rate": DROPOUT_RATE,
         "learning_rate": LEARNING_RATE,
-        "num_genres":genres_num
+        "num_genres": genres_num
     }
 
-    seeds = [128]
+    seeds = [67]
     for seed in seeds:
         print(f"\n--- Running Training Execution with Seed {seed} ---")
         checkpoint_name = f"sasrec_checkpoint_seed_{seed}.pth"

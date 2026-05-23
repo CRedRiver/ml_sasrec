@@ -26,19 +26,38 @@ def preprocess(data_path, genre_path=None):
 
     if genre_path:
         genre_df = pd.read_csv(genre_path, sep=',')
-        unique_genres = genre_df["genres"].unique()
-        genre_map = {genre: i for i, genre in enumerate(unique_genres, start=1)}
+        
+        # 1. Find every unique individual genre
+        all_unique_genres = set()
+        for genres_str in genre_df['genres']:
+            all_unique_genres.update(genres_str.split('|'))
+            
+        # 2. Sort them so the index mapping is always consistent
+        all_unique_genres = sorted(list(all_unique_genres))
+        num_genres = len(all_unique_genres)
+        
+        # Create a mapping like {'Action': 0, 'Comedy': 1, 'Horror': 2...}
+        genre_to_idx = {genre: i for i, genre in enumerate(all_unique_genres)}
 
-        movie_to_genre_id = {}
+        movie_to_multihot = {}
+        
         for _, row in genre_df.iterrows():
             raw_movie_id = row['movieId']
             
             if raw_movie_id in item_map:
                 remapped_id = item_map[raw_movie_id]
-                movie_to_genre_id[remapped_id] = genre_map[row['genres']]
                 
-        num_genres = len(unique_genres)
-        return sequences, num_items, item_map, movie_to_genre_id, num_genres
+                # Start with an array of all 0s
+                multi_hot_vector = [0.0] * num_genres
+                
+                # Flip the bit to 1.0 for every genre this movie belongs to
+                for g in row['genres'].split('|'):
+                    multi_hot_vector[genre_to_idx[g]] = 1.0
+                    
+                movie_to_multihot[remapped_id] = multi_hot_vector
+                
+        # Return the new multihot dictionary and the size of the multi-hot vector
+        return sequences, num_items, item_map, movie_to_multihot, num_genres
     else:
         return sequences, num_items, item_map
 

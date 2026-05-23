@@ -8,8 +8,8 @@ class SASRecNet(nn.Module):
         self.max_len = max_len
         
         self.item_emb = nn.Embedding(num_items + 1, hidden_size, padding_idx=0)
-        self.genre_emb = nn.Embedding(num_genres + 1, hidden_size, padding_idx=0)
         self.pos_emb = nn.Embedding(max_len, hidden_size)
+        self.genre_proj = nn.Linear(num_genres, hidden_size, bias=False)
         
         self.blocks = nn.ModuleList([
             SASRecBlock(hidden_size, num_heads, dropout_rate) for _ in range(num_blocks)
@@ -33,7 +33,7 @@ class SASRecNet(nn.Module):
         
         positions = torch.arange(seq_len, device=item_seqs.device).unsqueeze(0).expand(batch_size, seq_len)
         items = self.item_emb(item_seqs)
-        genres = self.genre_emb(genre_seqs)
+        genres = self.genre_proj(genre_seqs)
 
         combined_seqs = items + genres
         # Combine Item and Positional Embeddings
