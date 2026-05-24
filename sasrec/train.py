@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from sasrec.seed import set_seed
 from sasrec.sasrecnet import SASRecNet
 from sasrec.sasrecdataset import SASRecDataset
@@ -22,6 +23,7 @@ GENRE_PATH = r"D:\HUST\2025.2\ML\Project\data\movies.csv"
 CHECKPOINT = "sasrec_checkpoint.pth"
 EPOCHS = 100
 LEARNING_RATE = 0.002
+TEMP = 0.05
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class SASRec():
@@ -108,8 +110,16 @@ class SASRec():
         
                 optimizer.zero_grad(set_to_none=True)
         
+                # 1. Get the raw outputs
                 seq_output = model(batch_inputs) 
-                logits = torch.matmul(seq_output, model.item_emb.weight.t())
+                item_embeddings = model.item_emb.weight
+        
+        # 2. Force all vectors to have a length of exactly 1.0
+                norm_seq = F.normalize(seq_output, p=2, dim=-1)
+                norm_emb = F.normalize(item_embeddings, p=2, dim=-1)
+        
+        # 3. Multiply, and divide by a "Temperature" scale (0.05 is standard)
+                logits = torch.matmul(norm_seq, norm_emb.t()) / TEMP
                 logits = logits.permute(0, 2, 1) 
                 loss = criterion(logits, batch_targets)
         
@@ -167,7 +177,7 @@ if __name__ == "__main__":
         "learning_rate": LEARNING_RATE,
     }
 
-    seeds = [42]
+    seeds = [67]
     for seed in seeds:
         print(f"\n--- Running Training Execution with Seed {seed} ---")
         checkpoint_name = f"sasrec_checkpoint_seed_{seed}.pth"

@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from evaluate.metrics import hit_rate_at_k, ndcg_at_k, mrr_at_k
 
 def evaluate_model(model, dataloader, device, k=10, print_res=False):
@@ -13,8 +14,13 @@ def evaluate_model(model, dataloader, device, k=10, print_res=False):
             eval_inputs = eval_inputs.to(device)
             eval_targets = eval_targets.to(device)
             
-            seq_output = model(eval_inputs)
-            logits = torch.matmul(seq_output, model.item_emb.weight.t())
+            seq_output = model(eval_inputs) 
+            item_embeddings = model.item_emb.weight
+        
+            norm_seq = F.normalize(seq_output, p=2, dim=-1)
+            norm_emb = F.normalize(item_embeddings, p=2, dim=-1)
+        
+            logits = torch.matmul(norm_seq, norm_emb.t()) / 0.05
             
             # 1. Isolate the very last timestep (The "Leave-One-Out" Target)
             last_logits = logits[:, -1, :] 
