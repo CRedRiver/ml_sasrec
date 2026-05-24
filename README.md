@@ -27,10 +27,11 @@ This pipeline utilizes several training stability and feature engineering techni
 | :--- | :--- | :--- |
 | `MAX_LEN` | 300 | Concentrates the attention mechanism purely on dense, recent user behavior (at most 300 recent movies). |
 | `HIDDEN_SIZE` | 128 | Size of embedding vectors for each movie. |
-| `NUM_HEADS` | 2 | Allows the model to track both short-term shifts and overarching long-term taste. |
-| `DROPOUT_RATE` | 0.3 | Standard regularization for the Transformer blocks. |
-| `BATCH_SIZE` | 128 | Balances gradient smoothness with update frequency. |
-| `OPTIMIZER` | Adam | Standard Adam (`lr=0.001` peak, `weight_decay=0.0`). |
+| `NUM_HEADS` | 2 | Allows the model to track 4 distinct types of user habits, splitting the hidden size into 25-dim workspaces. |
+| `STRIDE` | None | Sliding window step size. Massively multiplies the training data by creating overlapping sequence variations. |
+| `DROPOUT_RATE` | 0.3 | Standard regularization for the Transformer blocks to prevent memorization. |
+| `BATCH_SIZE` | 64 | Balances gradient smoothness with update frequency. |
+| `OPTIMIZER` | Adam | Standard Adam (`lr=0.002`). |
 
 ---
 
