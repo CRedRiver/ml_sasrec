@@ -35,11 +35,11 @@ This pipeline utilizes several training stability and feature engineering techni
 
 ---
 
-## Results
+## Results (seed 1282)
 
-* **Hit Rate @ 20 (Test):** `[Your HR Here]` 
-* **NDCG @ 20 (Test):** `[Your NDCG Here]`
-* **MRR @ 20 (Test):** `[Your MRR Here]`
+* **Hit Rate @ 20 (Test):** `0.1689` 
+* **NDCG @ 20 (Test):** `0.0795`
+* **MRR @ 20 (Test):** `0.0552`
 
 **Evaluation Protocol:** Tested using Leave-One-Out (LOO) methodology. Metrics reflect the model's ability to rank the true next interaction against the entire un-interacted catalog.
 
