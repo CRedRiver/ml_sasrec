@@ -9,7 +9,6 @@ class SASRecNet(nn.Module):
         
         self.item_emb = nn.Embedding(num_items + 1, hidden_size, padding_idx=0)
         self.pos_emb = nn.Embedding(max_len, hidden_size)
-        self.genre_proj = nn.Linear(num_genres, hidden_size, bias=False)
         
         self.blocks = nn.ModuleList([
             SASRecBlock(hidden_size, num_heads, dropout_rate) for _ in range(num_blocks)
@@ -28,16 +27,13 @@ class SASRecNet(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
 
-    def forward(self, item_seqs, genre_seqs):
+    def forward(self, item_seqs):
         batch_size, seq_len = item_seqs.size()
         
         positions = torch.arange(seq_len, device=item_seqs.device).unsqueeze(0).expand(batch_size, seq_len)
         items = self.item_emb(item_seqs)
-        genres = self.genre_proj(genre_seqs)
-
-        combined_seqs = items + genres
         # Combine Item and Positional Embeddings
-        seq_embs = combined_seqs + self.pos_emb(positions)
+        seq_embs = items + self.pos_emb(positions)
         seq_embs = self.dropout(seq_embs)
         
         causal_mask = torch.triu(torch.ones((seq_len, seq_len), device=item_seqs.device), diagonal=1).bool()

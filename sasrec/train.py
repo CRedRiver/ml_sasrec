@@ -11,10 +11,10 @@ from evaluate.evaluate import evaluate_model
 
 # --- HYPERPARAMETERS ---
 MAX_LEN = 50  
-HIDDEN_SIZE = 128
+HIDDEN_SIZE = 50
 NUM_HEADS = 2
-DROPOUT_RATE = 0.3
-BATCH_SIZE = 64
+DROPOUT_RATE = 0.2
+BATCH_SIZE = 128
 PATIENCE_LIMIT = 10
 LABEL_SMOOTH = 0.0
 DATA_PATH = r"D:\HUST\2025.2\ML\Project\data\ratings.csv"
@@ -29,14 +29,14 @@ class SASRec():
                  patience_lim=PATIENCE_LIMIT, epochs=EPOCHS, lr=LEARNING_RATE, 
                  random_seed=1, batch_size=32, best_weights_path=None):
         set_seed(random_seed)
-        seqs, num_items, self.item_map, self.movie_to_genre, self.num_genres = preprocess(data, GENRE_PATH)
+        seqs, num_items, self.item_map= preprocess(data)
         
         train_seqs = [seq[:-2] for seq in seqs]
         eval_seqs = [seq[:-1] for seq in seqs]
 
         # Fixed stride to scale dynamically with the new max_len
-        train_dataset = SASRecDataset(train_seqs, self.num_genres, self.movie_to_genre, max_len, is_training=True, stride=max_len // 2)
-        eval_dataset = SASRecDataset(eval_seqs, self.num_genres, self.movie_to_genre, max_len)
+        train_dataset = SASRecDataset(train_seqs, max_len, is_training=True, stride=max_len // 2)
+        eval_dataset = SASRecDataset(eval_seqs, max_len)
 
         pin_mem = DEVICE.type == "cuda"
         num_w = 4 if DEVICE.type == "cuda" else 0
@@ -61,7 +61,6 @@ class SASRec():
             hidden_size=params["hidden_size"], 
             num_heads=params["num_heads"],
             dropout_rate=params["dropout_rate"],
-            num_genres=params["num_genres"]
         ).to(DEVICE)
 
         criterion = nn.CrossEntropyLoss(ignore_index=0, label_smoothing=LABEL_SMOOTH) 
@@ -103,14 +102,13 @@ class SASRec():
             total_loss = 0.0
     
             # FIXED: Unpacking order matches dataset (inputs, genres, targets)
-            for batch_inputs, batch_targets, batch_genres in self.dataloader:
+            for batch_inputs, batch_targets in self.dataloader:
                 batch_inputs = batch_inputs.to(DEVICE, non_blocking=True)
-                batch_genres = batch_genres.to(DEVICE, non_blocking=True)
                 batch_targets = batch_targets.to(DEVICE, non_blocking=True)
         
                 optimizer.zero_grad(set_to_none=True)
         
-                seq_output = model(batch_inputs, batch_genres) 
+                seq_output = model(batch_inputs) 
                 logits = torch.matmul(seq_output, model.item_emb.weight.t())
                 logits = logits.permute(0, 2, 1) 
                 loss = criterion(logits, batch_targets)
@@ -167,10 +165,9 @@ if __name__ == "__main__":
         "num_heads": NUM_HEADS,
         "dropout_rate": DROPOUT_RATE,
         "learning_rate": LEARNING_RATE,
-        "num_genres": genres_num
     }
 
-    seeds = [67]
+    seeds = [42]
     for seed in seeds:
         print(f"\n--- Running Training Execution with Seed {seed} ---")
         checkpoint_name = f"sasrec_checkpoint_seed_{seed}.pth"

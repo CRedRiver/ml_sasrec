@@ -9,12 +9,11 @@ def evaluate_model(model, dataloader, device, k=10, print_res=False):
     MRR_scores = []
     
     with torch.no_grad(): 
-        for eval_inputs, eval_targets, eval_genres in dataloader:
+        for eval_inputs, eval_targets in dataloader:
             eval_inputs = eval_inputs.to(device)
             eval_targets = eval_targets.to(device)
-            eval_genres = eval_genres.to(device)
             
-            seq_output = model(eval_inputs, eval_genres)
+            seq_output = model(eval_inputs)
             logits = torch.matmul(seq_output, model.item_emb.weight.t())
             
             # 1. Isolate the very last timestep (The "Leave-One-Out" Target)

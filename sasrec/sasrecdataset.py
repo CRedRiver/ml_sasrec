@@ -2,11 +2,9 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 class SASRecDataset(Dataset):
-    def __init__(self, sequences, num_genres, movie_multihot, max_len=50, is_training=False, stride=None):
+    def __init__(self, sequences, max_len=50, is_training=False, stride=None):
         super().__init__()
         self.max_len = max_len
-        self.movie_to_multihot = movie_multihot
-        self.num_genres = num_genres
         self.augmented_sequences = []
     
         # Default to max_len (no overlap). 
@@ -53,15 +51,5 @@ class SASRecDataset(Dataset):
         input_seq = ([0] * pad_len) + inputs
         target_seq = ([0] * pad_len) + targets
 
-        zero_genre_pad = [0.0] * self.num_genres
-        genre_seq = []
-        for item in inputs:
-            # Look up the multi-hot vector, default to all zeros if not found
-            genre_seq.append(self.movie_to_multihot.get(item, zero_genre_pad))
-            
-        # Pad the beginning of the sequence with the zero arrays
-        genre_seq = ([zero_genre_pad] * pad_len) + genre_seq
-
         return (torch.tensor(input_seq, dtype=torch.long), 
-                torch.tensor(target_seq, dtype=torch.long),
-                torch.tensor(genre_seq, dtype=torch.float32))
+                torch.tensor(target_seq, dtype=torch.long))
