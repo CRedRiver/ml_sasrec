@@ -64,6 +64,15 @@ class SASRec():
         criterion = nn.CrossEntropyLoss(ignore_index=0) 
         optimizer = optim.Adam(model.parameters(), lr=self.lr)
 
+        # OneCycleLR Scheduler for Transformer Warmup
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer, 
+            max_lr=self.lr, 
+            steps_per_epoch=len(self.dataloader), 
+            epochs=self.epochs, 
+            pct_start=0.2 # Spend the first 10% of training warming up the learning rate
+        )
+
         start_epoch = 0
         patience_counter = 0
 
@@ -100,6 +109,8 @@ class SASRec():
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
+
+                scheduler.step()
         
                 total_loss += loss.item()
             
@@ -150,7 +161,7 @@ if __name__ == "__main__":
         "num_genres":genres_num
     }
 
-    seeds = [128]
+    seeds = [1282]
     for seed in seeds:
         print(f"\n--- Running Training Execution with Seed {seed} ---")
         checkpoint_name = f"sasrec_checkpoint_seed_{seed}.pth"
