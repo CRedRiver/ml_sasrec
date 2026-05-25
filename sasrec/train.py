@@ -12,14 +12,17 @@ from evaluate.evaluate import evaluate_model
 MAX_LEN = 300
 HIDDEN_SIZE = 128
 NUM_HEADS = 2
+STRIDE = 100
 DROPOUT_RATE = 0.3
-BATCH_SIZE = 64
+BATCH_SIZE = 256    
 PATIENCE_LIMIT = 10
 DATA_PATH = r"D:\HUST\2025.2\ML\Project\data\ratings.csv"
 GENRE_PATH = r"D:\HUST\2025.2\ML\Project\data\movies.csv"
 CHECKPOINT = "sasrec_checkpoint.pth"
 EPOCHS = 100
 LEARNING_RATE = 0.002
+NEG_SAMP=2000
+SMOOTH = 0.0
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class SASRec():
@@ -32,11 +35,11 @@ class SASRec():
         train_seqs = [seq[:-2] for seq in seqs]
         eval_seqs = [seq[:-1] for seq in seqs]
 
-        train_dataset = SASRecDataset(train_seqs, self.movie_to_genre, max_len, is_training=True, stride=None)
+        train_dataset = SASRecDataset(train_seqs, self.movie_to_genre, max_len, is_training=True, stride=STRIDE)
         eval_dataset = SASRecDataset(eval_seqs, self.movie_to_genre, max_len)
 
         pin_mem = DEVICE.type == "cuda"
-        num_w = 4 if DEVICE.type == "cuda" else 0
+        num_w = 2 if DEVICE.type == "cuda" else 0
 
         self.dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_w, pin_memory=pin_mem)
         self.eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False, num_workers=num_w, pin_memory=pin_mem)
@@ -61,7 +64,7 @@ class SASRec():
             num_genres=params["num_genres"]
         ).to(DEVICE)
 
-        criterion = nn.CrossEntropyLoss(ignore_index=0) 
+        criterion = nn.CrossEntropyLoss(ignore_index=0, label_smoothing=0) 
         optimizer = optim.Adam(model.parameters(), lr=self.lr)
 
         # OneCycleLR Scheduler for Transformer Warmup
@@ -70,7 +73,7 @@ class SASRec():
             max_lr=self.lr, 
             steps_per_epoch=len(self.dataloader), 
             epochs=self.epochs, 
-            pct_start=0.2 # Spend the first 10% of training warming up the learning rate
+            pct_start=0.1 # Spend the first 10% of training warming up the learning rate
         )
 
         start_epoch = 0
@@ -117,9 +120,8 @@ class SASRec():
             avg_train_loss = total_loss / len(self.dataloader)
             
             # Step into metric verification using Leave-One-Out (LOO) with past history masking
-            val_hr, val_ndcg, val_mrr = evaluate_model(model, self.eval_dataloader, DEVICE, k=10)
+            val_hr, val_ndcg, val_mrr = evaluate_model(model, self.eval_dataloader, DEVICE, k=10, neg_samp=NEG_SAMP)
         
-            # Early stopping check based directly on performance metric ceiling
             if val_ndcg > self.best_eval_ndcg:  
                 self.best_eval_ndcg = val_ndcg
                 self.best_epoch = epoch + 1
@@ -161,7 +163,7 @@ if __name__ == "__main__":
         "num_genres":genres_num
     }
 
-    seeds = [1282]
+    seeds = [1]
     for seed in seeds:
         print(f"\n--- Running Training Execution with Seed {seed} ---")
         checkpoint_name = f"sasrec_checkpoint_seed_{seed}.pth"
