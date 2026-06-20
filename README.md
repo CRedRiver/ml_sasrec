@@ -36,14 +36,17 @@ This pipeline utilizes several training stability and feature engineering techni
 
 ---
 
-## Result Mean (5 iterations - 3706 negative samples)
+## Evaluation Results
 
-* **Hit Rate @ 10 (Test):** `0.2680` 
-* **NDCG @ 10 (Test):** `0.1464`
-* **MRR @ 10 (Test):** `0.1094`
+| Model | Hit Rate @10 | NDCG @10 | MRR @10 |
+| :--- | ---: | ---: | ---: |
+| Model_1 | 0.3300 | 0.1946 | 0.1534 |
+| Model_2 | 0.3316 | 0.1958 | 0.1541 |
+| Model_3 | 0.3298 | 0.1953 | 0.1542 |
+| Model_4 | 0.3281 | 0.1916 | 0.1499 |
+| Model_5 | 0.3195 | 0.1894 | 0.1497 |
 
-**Evaluation Protocol:** Tested using Leave-One-Out (LOO) methodology. Metrics reflect the model's ability to rank the true next interaction against the entire un-interacted catalog
-(3706 items).
+**Evaluation Protocol:** Tested using Leave-One-Out (LOO) methodology. Metrics reflect the model's ability to rank the true next interaction against the entire un-interacted catalog (3,706 items).
 
 ---
 
