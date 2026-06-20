@@ -20,27 +20,31 @@ def evaluate_model(model, dataloader, device, k=10, neg_samp=1000, print_res=Fal
             last_logits = logits[:, -1, :] 
             last_targets = eval_targets[:, -1] 
           
-            # Create a matrix of uniform probabilities (1.0) for every item in the catalog
-            probs = torch.ones_like(last_logits)
+            if neg_samp > 0:
+                # Mode: Negative Sampling: used for validation during training
+                probs = torch.ones_like(last_logits)
+                probs[:, 0] = 0.0 # Mask padding
+                probs.scatter_(1, eval_inputs, 0.0) # Mask history
+                probs.scatter_(1, last_targets.unsqueeze(1), 0.0) # Mask true target
+                
+                # Sample random distractors
+                negative_samples = torch.multinomial(probs, num_samples=neg_samp, replacement=False)
+                
+                sampled_logits = torch.full_like(last_logits, -float('inf'))
+                sampled_logits.scatter_(1, negative_samples, last_logits.gather(1, negative_samples))
+                sampled_logits.scatter_(1, last_targets.unsqueeze(1), last_logits.gather(1, last_targets.unsqueeze(1)))
             
-            # Mask out the padding token (0) so it is never sampled
-            probs[:, 0] = 0.0
-            
-            probs.scatter_(1, eval_inputs, 0.0)
-            
-            # Mask out the True Target movie
-            probs.scatter_(1, last_targets.unsqueeze(1), 0.0)
-            
-            # Sample `neg_samp` items for every user in the batch SIMULTANEOUSLY.
-            negative_samples = torch.multinomial(probs, num_samples=neg_samp, replacement=False)
-            
-            # Start with every movie at Negative Infinity
-            sampled_logits = torch.full_like(last_logits, -float('inf'))
-            
-            # UNMASK: Reveal the scores for the random negative samples and for 1 True Target
-            sampled_logits.scatter_(1, negative_samples, last_logits.gather(1, negative_samples))
-            sampled_logits.scatter_(1, last_targets.unsqueeze(1), last_logits.gather(1, last_targets.unsqueeze(1)))
+            else:
+                # Mode: Full Catalog: used for final test results
+                sampled_logits = last_logits.clone()
+                
+                # Mask out the padding token
+                sampled_logits[:, 0] = -float('inf')
+                
+                # Mask out the user's watched history
+                sampled_logits.scatter_(1, eval_inputs, -float('inf'))
 
+            # CALCULATE TOP K
             _, top_k_movie_ids = torch.topk(sampled_logits, k=k, dim=-1)
             
             recommended_lists = top_k_movie_ids.cpu().numpy().tolist()
@@ -61,7 +65,8 @@ def evaluate_model(model, dataloader, device, k=10, neg_samp=1000, print_res=Fal
     final_mrr = sum(MRR_scores) / len(MRR_scores) if MRR_scores else 0
     
     if print_res:
-        print(f"Evaluation Results (Target vs {neg_samp} Negatives):")
+        mode_str = f"{neg_samp} Negatives" if neg_samp > 0 else "Full Catalog"
+        print(f"Evaluation Results (Target vs {mode_str}):")
         print(f"Hit Rate @{k}: {final_hr:.4f}")
         print(f"NDCG @{k}:     {final_ndcg:.4f}")
         print(f"MRR @{k}:      {final_mrr:.4f}")
