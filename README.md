@@ -16,13 +16,13 @@ The core of this model is built on the original SASRec architecture, utilizing c
 This pipeline utilizes several training stability and feature engineering techniques:
 
 * **Combinatorial Categorical Encoding (Genres):** Raw genre strings (e.g., `Action|Sci-Fi`) are mapped directly to unique integer IDs.
-* **Two-Stage Evaluation Pipeline:** Uses a 2,000 Negative Sample protocol for epoch-to-epoch Validation (Early Stopping), and a Full-Catalog (3,706 items) protocol for Final Testing.
+* **Two-Stage Evaluation Pipeline:** Uses a 2,000 Negative Sample protocol for epoch-to-epoch Validation (Early Stopping), and a Full-Catalog protocol for Final Testing.
 * **Transformer Warmup Scheduling (`OneCycleLR`):** Prevents early gradient shattering by starting with a near-zero learning rate, gently warming up to a peak over the first 10% of training, and smoothly decaying.
 * **Gradient Security:** Implements L2 Gradient Norm Clipping (`max_norm=1.0`) to prevent exploding gradients.
 
 ---
 
-## Hyperparameters
+## Hyperparameters used
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
@@ -46,13 +46,18 @@ This pipeline utilizes several training stability and feature engineering techni
 | Model_4 | 0.3281 | 0.1916 | 0.1499 |
 | Model_5 | 0.3195 | 0.1894 | 0.1497 |
 
-**Evaluation Protocol:** Tested using Leave-One-Out (LOO) methodology. Metrics reflect the model's ability to rank the true next interaction against the entire un-interacted catalog (3,706 items).
+**Evaluation Protocol:** Tested using Leave-One-Out (LOO) methodology. Metrics reflect the model's ability to rank the true next interaction against the entire un-interacted catalog.
 
 ---
 
 ## Usage
 
-Update hyperparameters in train.py. To train the model from scratch using the configuration:
+To train the model from scratch with default hyperparameters using the configuration:
 
 ```bash
-python train.py
+python train.py --seeds 42
+```
+To train the model with custom hyperparameters using the configuration (example):
+```bash
+python train.py --max_len 200 --hidden_size 128 --dropout_rate 0.2 --seeds 42
+```
